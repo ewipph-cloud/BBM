@@ -38,7 +38,13 @@ service cloud.firestore {
         && request.auth.uid in resource.data.members
         && request.resource.data.members == resource.data.members
         && request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['lastMessage', 'updatedAt']);
+          .hasOnly([
+            'lastMessage',
+            'lastMessageType',
+            'lastMessageSenderId',
+            'lastMessageId',
+            'updatedAt'
+          ]);
       allow delete: if false;
 
       match /messages/{messageId} {
@@ -47,7 +53,11 @@ service cloud.firestore {
           && request.resource.data.senderId == request.auth.uid
           && request.resource.data.text is string
           && request.resource.data.text.size() > 0
-          && request.resource.data.text.size() <= 4000;
+          && request.resource.data.text.size() <= 4000
+          && request.resource.data.keys().hasOnly(['senderId', 'text', 'type', 'createdAt'])
+          && (!('type' in request.resource.data)
+            || request.resource.data.type == 'ping'
+              && request.resource.data.text == 'PING!!!');
         allow update, delete: if false;
       }
     }

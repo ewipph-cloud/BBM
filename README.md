@@ -18,6 +18,8 @@ Starter aplikasi chat 1:1 berbasis Next.js, Firebase Authentication, Cloud Fires
 
 Buka `http://localhost:3000`, buat akun, lalu klik kartu profil Anda di bagian atas daftar chat untuk melihat dan menyalin **PIN BBM 8 karakter**. Teman dapat memulai chat memakai PIN tersebut atau email akun yang sudah terdaftar.
 
+Di dalam chat, tombol **Ping** mengirim pesan Ping real-time. Aktifkan ikon speaker di header chat untuk mengizinkan bunyi Ping; browser dapat meminta izin notifikasi. Getaran hanya tersedia pada browser/perangkat yang mendukungnya. Ping memberi notifikasi saat aplikasi masih terbuka; notifikasi ketika aplikasi tertutup memerlukan Firebase Cloud Messaging dan belum tersedia.
+
 ### Deploy Firestore Rules
 
 Firebase Admin SDK tidak menerbitkan Security Rules. Gunakan Firebase CLI dengan service account yang memiliki izin mengelola Firestore Rules:

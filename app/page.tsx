@@ -15,7 +15,6 @@ import {
   set,
 } from "firebase/database";
 import {
-  addDoc,
   collection,
   doc,
   getDoc,
@@ -44,10 +43,13 @@ import {
   MoreVertical,
   Paperclip,
   Plus,
+  Radio,
   Search,
   Send,
   Smile,
   Users,
+  Volume2,
+  VolumeX,
   Wifi,
   X,
 } from "lucide-react";
@@ -59,6 +61,9 @@ type Chat = {
   members: string[];
   memberEmails: Record<string, string>;
   lastMessage?: string;
+  lastMessageType?: "text" | "ping";
+  lastMessageSenderId?: string;
+  lastMessageId?: string;
   updatedAt?: Timestamp | null;
 };
 
@@ -66,6 +71,7 @@ type ChatMessage = {
   id: string;
   senderId: string;
   text: string;
+  type?: "ping";
   createdAt?: Timestamp | null;
 };
 
@@ -106,6 +112,25 @@ const avatarColor = (value: string) => {
   return colors[hash % colors.length];
 };
 
+function playPingTone(context: AudioContext) {
+  const oscillator = context.createOscillator();
+  const volume = context.createGain();
+  const start = context.currentTime;
+
+  oscillator.type = "sine";
+  oscillator.frequency.setValueAtTime(1046.5, start);
+  oscillator.frequency.setValueAtTime(1318.5, start + 0.11);
+  volume.gain.setValueAtTime(0.0001, start);
+  volume.gain.exponentialRampToValueAtTime(0.16, start + 0.015);
+  volume.gain.setValueAtTime(0.13, start + 0.12);
+  volume.gain.exponentialRampToValueAtTime(0.0001, start + 0.32);
+
+  oscillator.connect(volume);
+  volume.connect(context.destination);
+  oscillator.start(start);
+  oscillator.stop(start + 0.33);
+}
+
 export default function Home() {
   const [user, setUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
@@ -127,8 +152,13 @@ export default function Home() {
   const [chatError, setChatError] = useState("");
   const [search, setSearch] = useState("");
   const [sending, setSending] = useState(false);
+  const [pingSoundEnabled, setPingSoundEnabled] = useState(false);
+  const [pingFlash, setPingFlash] = useState(false);
   const [mobileChatOpen, setMobileChatOpen] = useState(false);
   const messageEndRef = useRef<HTMLDivElement>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const pingSoundEnabledRef = useRef(false);
+  const seenPingIdsRef = useRef(new Set<string>());
 
   const selectedChat = chats.find((chat) => chat.id === selectedChatId);
   const otherUserId = selectedChat?.members.find((member) => member !== user?.uid);
@@ -169,6 +199,7 @@ export default function Home() {
       collection(db, "chats"),
       where("members", "array-contains", user.uid),
     );
+    let initialSnapshot = true;
     return onSnapshot(
       chatsQuery,
       (snapshot) => {
@@ -181,6 +212,27 @@ export default function Home() {
             (second.updatedAt?.toMillis() ?? 0) -
             (first.updatedAt?.toMillis() ?? 0),
         );
+        if (initialSnapshot) {
+          initialSnapshot = false;
+          for (const chat of nextChats) {
+            if (chat.lastMessageType === "ping" && chat.lastMessageId) {
+              seenPingIdsRef.current.add(chat.lastMessageId);
+            }
+          }
+        } else {
+          for (const change of snapshot.docChanges()) {
+            const changedChat = change.doc.data() as Omit<Chat, "id">;
+            if (
+              changedChat.lastMessageId &&
+              !seenPingIdsRef.current.has(changedChat.lastMessageId) &&
+              changedChat.lastMessageType === "ping" &&
+              changedChat.lastMessageSenderId !== user.uid
+            ) {
+              seenPingIdsRef.current.add(changedChat.lastMessageId);
+              receivePing(changedChat);
+            }
+          }
+        }
         setChats(nextChats);
       },
       (error) => setChatError(friendlyError(error)),
@@ -279,6 +331,8 @@ export default function Home() {
             ...(messageDoc.data() as Omit<ChatMessage, "id">),
           })),
         );
+
+        let initialSnapshot = true;
       },
       (error) => setChatError(friendlyError(error)),
     );
@@ -406,6 +460,9 @@ export default function Home() {
       });
       batch.update(doc(db, "chats", selectedChatId), {
         lastMessage: text,
+        lastMessageType: "text",
+        lastMessageSenderId: user.uid,
+        lastMessageId: messageRef.id,
         updatedAt: serverTimestamp(),
       });
       await batch.commit();
@@ -414,6 +471,81 @@ export default function Home() {
       setChatError(friendlyError(error));
     } finally {
       setSending(false);
+    }
+  }
+
+  async function sendPing() {
+    if (!user || !db || !selectedChatId || sending) return;
+    setChatError("");
+    setSending(true);
+    try {
+      const batch = writeBatch(db);
+      const messageRef = doc(collection(db, "chats", selectedChatId, "messages"));
+      batch.set(messageRef, {
+        senderId: user.uid,
+        text: "PING!!!",
+        type: "ping",
+        createdAt: serverTimestamp(),
+      });
+      batch.update(doc(db, "chats", selectedChatId), {
+        lastMessage: "PING!!!",
+        lastMessageType: "ping",
+        lastMessageSenderId: user.uid,
+        lastMessageId: messageRef.id,
+        updatedAt: serverTimestamp(),
+      });
+      await batch.commit();
+    } catch (error) {
+      setChatError(friendlyError(error));
+    } finally {
+      setSending(false);
+    }
+  }
+
+  function receivePing(chat: Omit<Chat, "id">) {
+    const senderId = chat.lastMessageSenderId;
+    const sender = senderId ? chat.memberEmails?.[senderId] : undefined;
+    if (pingSoundEnabledRef.current && audioContextRef.current) {
+      playPingTone(audioContextRef.current);
+    }
+    if ("vibrate" in navigator) navigator.vibrate([180, 80, 180]);
+    setPingFlash(true);
+    window.setTimeout(() => setPingFlash(false), 950);
+
+    if (
+      document.visibilityState === "hidden" &&
+      "Notification" in window &&
+      Notification.permission === "granted"
+    ) {
+      const notification = new Notification("BBM Ping!", {
+        body: `${sender?.split("@")[0] ?? "Teman"} mengirim Ping.`,
+        tag: chat.lastMessageId,
+      });
+      notification.onclick = () => {
+        window.focus();
+        notification.close();
+      };
+    }
+  }
+
+  async function togglePingSound() {
+    if (pingSoundEnabled) {
+      pingSoundEnabledRef.current = false;
+      setPingSoundEnabled(false);
+      return;
+    }
+    try {
+      const context = audioContextRef.current ?? new AudioContext();
+      audioContextRef.current = context;
+      await context.resume();
+      pingSoundEnabledRef.current = true;
+      setPingSoundEnabled(true);
+      playPingTone(context);
+      if ("Notification" in window && Notification.permission === "default") {
+        void Notification.requestPermission();
+      }
+    } catch {
+      setChatError("Suara Ping tidak bisa diaktifkan di browser ini.");
     }
   }
 
@@ -518,7 +650,7 @@ export default function Home() {
   }
 
   return (
-    <main className="app-shell">
+    <main className={`app-shell ${pingFlash ? "ping-flash" : ""}`}>
       <aside className={`sidebar ${mobileChatOpen ? "sidebar-hidden-mobile" : ""}`}>
         <header className="sidebar-header">
           <div className="brand-lockup compact">
@@ -618,7 +750,11 @@ export default function Home() {
                       <time>{formatTime(chat.updatedAt)}</time>
                     </div>
                     <div className="conversation-bottomline">
-                      <span>{chat.lastMessage || "Mulai percakapan baru"}</span>
+                      <span>
+                        {chat.lastMessageType === "ping"
+                          ? "📣 BBM Ping!"
+                          : chat.lastMessage || "Mulai percakapan baru"}
+                      </span>
                       {chat.lastMessage && <CheckCheck size={15} className="read-icon" />}
                     </div>
                   </div>
@@ -648,6 +784,16 @@ export default function Home() {
                 <span>{presence[otherUserId ?? ""]?.state === "online" ? "online" : otherEmail}</span>
               </div>
               <div className="chat-header-actions">
+                <button
+                  className={`icon-button sound-toggle ${pingSoundEnabled ? "sound-enabled" : ""}`}
+                  type="button"
+                  title={pingSoundEnabled ? "Matikan suara Ping" : "Aktifkan suara dan notifikasi Ping"}
+                  aria-label={pingSoundEnabled ? "Matikan suara Ping" : "Aktifkan suara dan notifikasi Ping"}
+                  aria-pressed={pingSoundEnabled}
+                  onClick={() => void togglePingSound()}
+                >
+                  {pingSoundEnabled ? <Volume2 size={18} /> : <VolumeX size={18} />}
+                </button>
                 <span className="encrypted-label"><Wifi size={14} /> REAL-TIME</span>
                 <button className="icon-button" title="Opsi lainnya" aria-label="Opsi lainnya"><MoreVertical size={19} /></button>
               </div>
@@ -672,9 +818,17 @@ export default function Home() {
                         key={message.id}
                       >
                         {!mine && <div className="message-avatar-space">{showSender && <span style={{ background: avatarColor(otherEmail) }}>{otherEmail.slice(0, 1).toUpperCase()}</span>}</div>}
-                        <div className={`message-bubble ${mine ? "message-mine" : "message-theirs"}`}>
+                        <div className={`message-bubble ${mine ? "message-mine" : "message-theirs"} ${message.type === "ping" ? "message-ping" : ""}`}>
                           {showSender && <span className="message-sender">{otherEmail.split("@")[0]}</span>}
-                          <p>{message.text}</p>
+                          {message.type === "ping" ? (
+                            <div className="ping-message-content">
+                              <Radio size={23} />
+                              <strong>BBM PING!</strong>
+                              <span>Perhatian, ada Ping untukmu</span>
+                            </div>
+                          ) : (
+                            <p>{message.text}</p>
+                          )}
                           <div className="message-meta">
                             <time>{formatTime(message.createdAt)}</time>
                             {mine && <Check size={13} />}
@@ -692,6 +846,15 @@ export default function Home() {
             <form className="composer" onSubmit={sendMessage}>
               <button type="button" className="icon-button composer-tool" aria-label="Emoji" title="Emoji (segera hadir)" disabled><Smile size={21} /></button>
               <button type="button" className="icon-button composer-tool attach-button" aria-label="Lampiran" title="Lampiran (segera hadir)" disabled><Paperclip size={19} /></button>
+              <button
+                type="button"
+                className="ping-button"
+                onClick={() => void sendPing()}
+                disabled={sending}
+                title="Kirim BBM Ping"
+              >
+                <Radio size={17} /><span>Ping</span>
+              </button>
               <input
                 aria-label="Tulis pesan"
                 placeholder="Tulis pesan..."
