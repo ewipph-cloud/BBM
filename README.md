@@ -16,7 +16,7 @@ Starter aplikasi chat 1:1 berbasis Next.js, Firebase Authentication, Cloud Fires
    npm run dev
    ```
 
-Buka `http://localhost:3000`, buat akun, lalu bagikan **PIN BBM 8 karakter** yang muncul di profil Anda. Teman dapat memulai chat memakai PIN tersebut atau email akun yang sudah terdaftar.
+Buka `http://localhost:3000`, buat akun, lalu klik kartu profil Anda di bagian atas daftar chat untuk melihat dan menyalin **PIN BBM 8 karakter**. Teman dapat memulai chat memakai PIN tersebut atau email akun yang sudah terdaftar.
 
 ## Deploy ke Vercel
 

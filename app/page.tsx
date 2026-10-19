@@ -121,6 +121,8 @@ export default function Home() {
   const [contactEmail, setContactEmail] = useState("");
   const [userPin, setUserPin] = useState("");
   const [pinCopied, setPinCopied] = useState(false);
+  const [pinError, setPinError] = useState("");
+  const [showProfile, setShowProfile] = useState(false);
   const [showNewChat, setShowNewChat] = useState(false);
   const [chatError, setChatError] = useState("");
   const [search, setSearch] = useState("");
@@ -159,8 +161,10 @@ export default function Home() {
     if (!user || !db) {
       setChats([]);
       setUserPin("");
+      setPinError("");
       return;
     }
+    setPinError("");
     const chatsQuery = query(
       collection(db, "chats"),
       where("members", "array-contains", user.uid),
@@ -225,7 +229,9 @@ export default function Home() {
       throw new Error("Tidak berhasil membuat PIN unik. Coba muat ulang halaman.");
     }
 
-    void ensurePin().catch((error: unknown) => setChatError(friendlyError(error)));
+    void ensurePin().catch((error: unknown) => {
+      setPinError(friendlyError(error));
+    });
   }, [user]);
 
   useEffect(() => {
@@ -412,6 +418,17 @@ export default function Home() {
     }
   }
 
+  async function copyPin() {
+    if (!userPin) return;
+    try {
+      await navigator.clipboard.writeText(userPin);
+      setPinCopied(true);
+      window.setTimeout(() => setPinCopied(false), 1600);
+    } catch {
+      setPinError("PIN tidak bisa disalin. Silakan salin PIN secara manual.");
+    }
+  }
+
   if (!firebaseReady) {
     return (
       <main className="setup-screen">
@@ -534,7 +551,13 @@ export default function Home() {
             </button>
           </div>
         </header>
-        <div className="current-user">
+        <button
+          className="current-user profile-trigger"
+          type="button"
+          onClick={() => setShowProfile(true)}
+          aria-haspopup="dialog"
+          aria-label="Lihat profil dan PIN BBM"
+        >
           <div className="avatar self-avatar" style={{ background: avatarColor(user.email ?? user.uid) }}>
             {(user.email ?? "S").slice(0, 1).toUpperCase()}
             <i className="online-dot" />
@@ -543,31 +566,14 @@ export default function Home() {
             <strong>{user.email}</strong>
             <span><i className="online-dot small" /> Aktif sekarang</span>
             <div className="my-pin">
-              <span>PIN BBM</span>
-              <strong>{userPin || "MEMUAT..."}</strong>
-              {userPin && (
-                <button
-                  type="button"
-                  title="Salin PIN BBM"
-                  aria-label="Salin PIN BBM"
-                  onClick={() => {
-                    void navigator.clipboard
-                      .writeText(userPin)
-                      .then(() => {
-                        setPinCopied(true);
-                        window.setTimeout(() => setPinCopied(false), 1600);
-                      })
-                      .catch(() => setChatError("PIN tidak bisa disalin. Salin PIN secara manual."));
-                  }}
-                >
-                  {pinCopied ? <Check size={13} /> : <Copy size={13} />}
-                  {pinCopied ? "TERSALIN" : "SALIN"}
-                </button>
-              )}
+              <span>PIN</span>
+              <strong>{userPin || (pinError ? "GAGAL" : "DIBUAT...")}</strong>
+              <span className="profile-hint">LIHAT PROFIL</span>
             </div>
+            {pinError && <span className="pin-inline-error">{pinError}</span>}
           </div>
           <MoreVertical size={17} className="muted-icon" />
-        </div>
+        </button>
         <div className="search-wrap">
           <Search size={17} />
           <input
@@ -718,6 +724,46 @@ export default function Home() {
           </div>
         )}
       </section>
+
+      {showProfile && (
+        <div
+          className="modal-backdrop"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setShowProfile(false);
+          }}
+        >
+          <section
+            className="new-chat-modal profile-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="profile-title"
+          >
+            <header>
+              <div className="modal-icon"><MessageCircle size={20} /></div>
+              <button className="icon-button" onClick={() => setShowProfile(false)} aria-label="Tutup profil"><X size={19} /></button>
+            </header>
+            <p className="eyebrow">PROFIL BBM</p>
+            <h2 id="profile-title">Profil Anda</h2>
+            <p className="profile-email">{user.email}</p>
+            <div className="profile-pin-card">
+              <span>PIN BBM ANDA</span>
+              <strong>{userPin || (pinError ? "PIN BELUM TERSEDIA" : "SEDANG MEMBUAT PIN...")}</strong>
+              <p>Bagikan PIN ini kepada teman agar mereka dapat mengundang Anda mengobrol.</p>
+              {pinError && <p className="profile-pin-error">{pinError}</p>}
+              <button className="primary-button copy-pin-button" type="button" onClick={() => void copyPin()} disabled={!userPin}>
+                {pinCopied ? <Check size={16} /> : <Copy size={16} />}
+                {pinCopied ? "PIN TERSALIN" : "SALIN PIN"}
+              </button>
+            </div>
+            <button className="profile-new-chat" type="button" onClick={() => {
+              setShowProfile(false);
+              setShowNewChat(true);
+            }}>
+              <Plus size={16} /> Mulai chat dengan PIN teman
+            </button>
+          </section>
+        </div>
+      )}
 
       {showNewChat && (
         <div className="modal-backdrop" onMouseDown={(event) => {

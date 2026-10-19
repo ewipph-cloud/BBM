@@ -378,3 +378,19 @@ body { background: #e9eff3; }
 .my-pin > strong { color: #0876b7; font: 800 12px ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: 1px; }
 .my-pin button { display: flex; align-items: center; gap: 3px; padding: 3px 5px; border: 1px solid #c9e1ec; border-radius: 4px; background: #f8fcfe; color: #2581a8; font-size: 8px; font-weight: 700; cursor: pointer; }
 .my-pin button:hover { border-color: #80bfd9; background: white; }
+.profile-trigger { width: 100%; border: 0; text-align: left; cursor: pointer; }
+.profile-trigger:hover { background: #dceef7; }
+.profile-trigger:focus-visible { position: relative; z-index: 1; outline-color: #1684c2; outline-offset: -3px; }
+.profile-hint { margin-left: auto; color: #3388aa !important; font-size: 8px !important; font-weight: 700; letter-spacing: .45px; }
+.pin-inline-error { display: block; color: #a34f44 !important; font-size: 10px !important; line-height: 1.4; }
+.profile-modal { max-width: 390px; }
+.profile-email { margin: 7px 0 20px; color: #78909d; font-size: 12px; overflow-wrap: anywhere; }
+.profile-pin-card { padding: 18px; border: 1px solid #cfe3ed; border-radius: 9px; background: linear-gradient(145deg, #f3fafe, #e8f5fb); text-align: center; }
+.profile-pin-card > span { display: block; margin-bottom: 9px; color: #57869e; font-size: 9px; font-weight: 700; letter-spacing: 1.2px; }
+.profile-pin-card > strong { display: block; color: #0876b7; font: 800 25px ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: 3px; overflow-wrap: anywhere; }
+.profile-pin-card > p { margin: 10px auto 15px; color: #708997; font-size: 11px; line-height: 1.6; }
+.profile-pin-card .profile-pin-error { margin-top: 0; color: #a34f44; }
+.copy-pin-button { width: 100%; min-height: 42px; font-size: 11px; }
+.copy-pin-button:disabled { background: #b7ccd6; cursor: not-allowed; }
+.profile-new-chat { display: flex; align-items: center; justify-content: center; gap: 7px; width: 100%; margin-top: 12px; padding: 11px; border: 1px solid #d6e6ed; border-radius: 6px; background: white; color: #287fa3; font-size: 11px; font-weight: 600; cursor: pointer; }
+.profile-new-chat:hover { background: #f4fafc; }
