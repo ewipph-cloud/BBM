@@ -369,19 +369,18 @@ export default function Home() {
       const members = [user.uid, targetId].sort();
       const chatId = members.join("_");
       const chatRef = doc(db, "chats", chatId);
-      const existing = await getDoc(chatRef);
-      if (!existing.exists()) {
-        await setDoc(chatRef, {
+      await setDoc(
+        chatRef,
+        {
           members,
           memberEmails: {
             [user.uid]: user.email?.toLowerCase() ?? "",
             [targetId]: targetEmail,
           },
-          lastMessage: "",
           updatedAt: serverTimestamp(),
-          createdAt: serverTimestamp(),
-        });
-      }
+        },
+        { merge: true },
+      );
       setSelectedChatId(chatId);
       setMobileChatOpen(true);
       setShowNewChat(false);
