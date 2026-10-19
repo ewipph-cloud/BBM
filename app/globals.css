@@ -370,3 +370,11 @@ body { background: #e9eff3; }
   .sidebar-header { height: 62px; }
   .chat-header { height: 62px; flex-basis: 62px; }
 }
+
+.current-user { align-items: flex-start; }
+.current-user-info { gap: 5px; }
+.my-pin { display: flex; align-items: center; gap: 7px; margin-top: 3px; }
+.my-pin > span { color: #66889b; font-size: 9px; font-weight: 700; letter-spacing: .55px; }
+.my-pin > strong { color: #0876b7; font: 800 12px ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: 1px; }
+.my-pin button { display: flex; align-items: center; gap: 3px; padding: 3px 5px; border: 1px solid #c9e1ec; border-radius: 4px; background: #f8fcfe; color: #2581a8; font-size: 8px; font-weight: 700; cursor: pointer; }
+.my-pin button:hover { border-color: #80bfd9; background: white; }

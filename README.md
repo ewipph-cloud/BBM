@@ -16,7 +16,7 @@ Starter aplikasi chat 1:1 berbasis Next.js, Firebase Authentication, Cloud Fires
    npm run dev
    ```
 
-Buka `http://localhost:3000`, buat akun, lalu mulai chat menggunakan email akun lain yang sudah terdaftar.
+Buka `http://localhost:3000`, buat akun, lalu bagikan **PIN BBM 8 karakter** yang muncul di profil Anda. Teman dapat memulai chat memakai PIN tersebut atau email akun yang sudah terdaftar.
 
 ## Deploy ke Vercel
 
@@ -25,8 +25,11 @@ Impor repository ini ke Vercel, tambahkan semua variabel dari `.env.example` di 
 ## Struktur data
 
 - `users/{uid}` — email dan waktu pembuatan akun.
+- `pins/{PIN}` — pemetaan PIN publik ke UID pengguna; PIN dibuat unik melalui transaksi Firestore.
 - `chats/{uid1_uid2}` — anggota, alamat email anggota, pesan terakhir, dan waktu pembaruan.
 - `chats/{chatId}/messages/{messageId}` — pesan chat.
 - Realtime Database `presence/{uid}` — status online/offline; offline diatur dengan `onDisconnect`.
 
 Firestore menyimpan riwayat pesan dan daftar percakapan; Realtime Database dipakai untuk presence. Presence hanya dapat ditulis pemilik UID dan dibaca oleh pengguna yang sudah login. Aturan Firestore membatasi chat/pesan ke anggota percakapan. Aplikasi ini adalah fondasi MVP, belum mencakup grup, upload media, enkripsi end-to-end, atau notifikasi push.
+
+PIN adalah identitas pencarian untuk memulai chat, bukan kata sandi atau faktor autentikasi. Pengguna lama mendapat PIN saat masuk setelah versi ini dipasang; pastikan aturan terbaru dari `firestore.rules` sudah diterapkan.

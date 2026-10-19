@@ -25,6 +25,7 @@ import {
   onSnapshot,
   orderBy,
   query,
+  runTransaction,
   serverTimestamp,
   setDoc,
   where,
@@ -37,6 +38,7 @@ import {
   Check,
   CheckCheck,
   CircleAlert,
+  Copy,
   LogOut,
   MessageCircle,
   MoreVertical,
@@ -82,7 +84,12 @@ const friendlyError = (error: unknown) => {
     "auth/too-many-requests": "Terlalu banyak percobaan. Coba lagi nanti.",
     "permission-denied": "Akses ditolak. Periksa Firebase Security Rules.",
   };
-  return messages[code] ?? "Terjadi kesalahan. Silakan coba lagi.";
+  return (
+    messages[code] ??
+    (error instanceof Error && !("code" in error)
+      ? error.message
+      : "Terjadi kesalahan. Silakan coba lagi.")
+  );
 };
 
 const formatTime = (timestamp?: Timestamp | null) =>
@@ -112,6 +119,8 @@ export default function Home() {
   const [presence, setPresence] = useState<PresenceMap>({});
   const [draft, setDraft] = useState("");
   const [contactEmail, setContactEmail] = useState("");
+  const [userPin, setUserPin] = useState("");
+  const [pinCopied, setPinCopied] = useState(false);
   const [showNewChat, setShowNewChat] = useState(false);
   const [chatError, setChatError] = useState("");
   const [search, setSearch] = useState("");
@@ -149,6 +158,7 @@ export default function Home() {
   useEffect(() => {
     if (!user || !db) {
       setChats([]);
+      setUserPin("");
       return;
     }
     const chatsQuery = query(
@@ -171,6 +181,51 @@ export default function Home() {
       },
       (error) => setChatError(friendlyError(error)),
     );
+  }, [user]);
+
+  useEffect(() => {
+    if (!user || !db) return;
+
+    const currentUser = user;
+    const firestore = db;
+    const userRef = doc(firestore, "users", currentUser.uid);
+    const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+
+    async function ensurePin() {
+      for (let attempt = 0; attempt < 5; attempt += 1) {
+        const bytes = crypto.getRandomValues(new Uint8Array(8));
+        const pin = Array.from(bytes, (byte) => alphabet[byte & 31]).join("");
+        const assignedPin = await runTransaction(firestore, async (transaction) => {
+          const profile = await transaction.get(userRef);
+          const existingPin = profile.data()?.pin;
+          if (typeof existingPin === "string") return existingPin;
+
+          const claimRef = doc(firestore, "pins", pin);
+          const claim = await transaction.get(claimRef);
+          if (claim.exists()) return null;
+
+          transaction.set(
+            userRef,
+            {
+              email: currentUser.email?.toLowerCase() ?? "",
+              pin,
+              createdAt: profile.data()?.createdAt ?? serverTimestamp(),
+            },
+            { merge: true },
+          );
+          transaction.set(claimRef, { uid: currentUser.uid, pin });
+          return pin;
+        });
+
+        if (assignedPin) {
+          setUserPin(assignedPin);
+          return;
+        }
+      }
+      throw new Error("Tidak berhasil membuat PIN unik. Coba muat ulang halaman.");
+    }
+
+    void ensurePin().catch((error: unknown) => setChatError(friendlyError(error)));
   }, [user]);
 
   useEffect(() => {
@@ -254,25 +309,58 @@ export default function Home() {
     event.preventDefault();
     if (!user || !db) return;
     setChatError("");
-    const normalizedEmail = contactEmail.trim().toLowerCase();
-    if (normalizedEmail === user.email?.toLowerCase()) {
-      setChatError("Masukkan email pengguna lain, bukan email Anda sendiri.");
-      return;
-    }
+    const identifier = contactEmail.trim();
     try {
-      const result = await getDocs(
-        query(
-          collection(db, "users"),
-          where("email", "==", normalizedEmail),
-          limit(1),
-        ),
-      );
-      const target = result.docs[0];
-      if (!target) {
-        setChatError("Pengguna belum terdaftar. Minta mereka membuat akun Ruang.");
-        return;
+      let targetId = "";
+      let targetEmail = "";
+
+      if (identifier.includes("@")) {
+        const normalizedEmail = identifier.toLowerCase();
+        if (normalizedEmail === user.email?.toLowerCase()) {
+          setChatError("Masukkan email atau PIN pengguna lain, bukan milik Anda.");
+          return;
+        }
+        const result = await getDocs(
+          query(
+            collection(db, "users"),
+            where("email", "==", normalizedEmail),
+            limit(1),
+          ),
+        );
+        const target = result.docs[0];
+        if (!target) {
+          setChatError("Pengguna belum terdaftar. Periksa email atau PIN BBM-nya.");
+          return;
+        }
+        targetId = target.id;
+        targetEmail = normalizedEmail;
+      } else {
+        const pin = identifier.toUpperCase();
+        if (!/^[A-Z0-9]{8}$/.test(pin)) {
+          setChatError("Masukkan email atau PIN BBM 8 karakter.");
+          return;
+        }
+        const claim = await getDoc(doc(db, "pins", pin));
+        const claimedUid = claim.data()?.uid;
+        if (typeof claimedUid !== "string") {
+          setChatError("PIN BBM tidak ditemukan. Periksa kembali PIN teman Anda.");
+          return;
+        }
+        if (claimedUid === user.uid) {
+          setChatError("Itu PIN BBM Anda sendiri. Masukkan PIN teman.");
+          return;
+        }
+        const profile = await getDoc(doc(db, "users", claimedUid));
+        const profileEmail = profile.data()?.email;
+        if (typeof profileEmail !== "string") {
+          setChatError("Profil pengguna dengan PIN tersebut tidak ditemukan.");
+          return;
+        }
+        targetId = claimedUid;
+        targetEmail = profileEmail;
       }
-      const members = [user.uid, target.id].sort();
+
+      const members = [user.uid, targetId].sort();
       const chatId = members.join("_");
       const chatRef = doc(db, "chats", chatId);
       const existing = await getDoc(chatRef);
@@ -281,7 +369,7 @@ export default function Home() {
           members,
           memberEmails: {
             [user.uid]: user.email?.toLowerCase() ?? "",
-            [target.id]: normalizedEmail,
+            [targetId]: targetEmail,
           },
           lastMessage: "",
           updatedAt: serverTimestamp(),
@@ -454,6 +542,29 @@ export default function Home() {
           <div className="current-user-info">
             <strong>{user.email}</strong>
             <span><i className="online-dot small" /> Aktif sekarang</span>
+            <div className="my-pin">
+              <span>PIN BBM</span>
+              <strong>{userPin || "MEMUAT..."}</strong>
+              {userPin && (
+                <button
+                  type="button"
+                  title="Salin PIN BBM"
+                  aria-label="Salin PIN BBM"
+                  onClick={() => {
+                    void navigator.clipboard
+                      .writeText(userPin)
+                      .then(() => {
+                        setPinCopied(true);
+                        window.setTimeout(() => setPinCopied(false), 1600);
+                      })
+                      .catch(() => setChatError("PIN tidak bisa disalin. Salin PIN secara manual."));
+                  }}
+                >
+                  {pinCopied ? <Check size={13} /> : <Copy size={13} />}
+                  {pinCopied ? "TERSALIN" : "SALIN"}
+                </button>
+              )}
+            </div>
           </div>
           <MoreVertical size={17} className="muted-icon" />
         </div>
@@ -621,12 +732,15 @@ export default function Home() {
             <h2 id="new-chat-title">Siapa yang ingin Anda sapa?</h2>
             <p className="modal-copy">Masukkan email yang digunakan teman Anda saat mendaftar.</p>
             <form onSubmit={startChat}>
-              <label htmlFor="contact-email">Email teman</label>
+              <label htmlFor="contact-email">Email atau PIN BBM teman</label>
               <input
                 id="contact-email"
                 autoFocus
-                type="email"
-                placeholder="teman@email.com"
+                type="text"
+                placeholder="teman@email.com atau A1B2C3D4"
+                autoCapitalize="characters"
+                autoComplete="off"
+                maxLength={320}
                 value={contactEmail}
                 onChange={(event) => setContactEmail(event.target.value)}
                 required
