@@ -18,6 +18,17 @@ Starter aplikasi chat 1:1 berbasis Next.js, Firebase Authentication, Cloud Fires
 
 Buka `http://localhost:3000`, buat akun, lalu klik kartu profil Anda di bagian atas daftar chat untuk melihat dan menyalin **PIN BBM 8 karakter**. Teman dapat memulai chat memakai PIN tersebut atau email akun yang sudah terdaftar.
 
+### Deploy Firestore Rules
+
+Firebase Admin SDK tidak menerbitkan Security Rules. Gunakan Firebase CLI dengan service account yang memiliki izin mengelola Firestore Rules:
+
+```bash
+GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json \
+  npx firebase-tools deploy --only firestore:rules --project YOUR_FIREBASE_PROJECT_ID
+```
+
+`firebase.json` menunjuk ke `firestore.rules` untuk perintah deploy tersebut.
+
 ## Deploy ke Vercel
 
 Impor repository ini ke Vercel, tambahkan semua variabel dari `.env.example` di **Project Settings → Environment Variables**, lalu deploy. Jika nilai environment berubah, lakukan redeploy.
