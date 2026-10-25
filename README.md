@@ -45,4 +45,8 @@ Impor repository ini ke Vercel, tambahkan semua variabel dari `.env.example` di 
 
 Firestore menyimpan riwayat pesan dan daftar percakapan; Realtime Database dipakai untuk presence. Presence hanya dapat ditulis pemilik UID dan dibaca oleh pengguna yang sudah login. Aturan Firestore membatasi chat/pesan ke anggota percakapan. Aplikasi ini adalah fondasi MVP, belum mencakup grup, upload media, enkripsi end-to-end, atau notifikasi push.
 
+### Catatan tampilan aplikasi
+
+Navigasi, pencarian chat/kontak, modal chat baru, autentikasi, daftar pengguna, percakapan, pesan, PIN, dan status online memakai Firebase. Tab Status saat ini menampilkan presence kontak, bukan unggahan status; tab Panggilan menampilkan kontak tetapi panggilan belum terhubung. Grup, favorit, penanda pesan belum dibaca, dan lampiran juga belum tersedia.
+
 PIN adalah identitas pencarian untuk memulai chat, bukan kata sandi atau faktor autentikasi. Pengguna lama mendapat PIN saat masuk setelah versi ini dipasang; pastikan aturan terbaru dari `firestore.rules` sudah diterapkan.
